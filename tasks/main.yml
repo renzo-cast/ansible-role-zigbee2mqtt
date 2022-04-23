@@ -1,0 +1,75 @@
+---
+
+- name: get device location
+  shell: ls /dev/serial/by-id
+  register: all_devices
+  failed_when: all_devices.stdout_lines | length != 1
+  when: device_brand is not defined
+  become: true
+
+- name: get device name by brand
+  shell: "ls /dev/serial/by-id | grep -i {{ device_brand }}"
+  register: devices_by_brand
+  failed_when: devices_by_brand.stdout_lines | length != 1
+  when: device_brand is defined
+  become: true
+
+- name: set device value
+  set_fact:
+    zigbee2mqtt_device: "{{ devices_by_brand.stdout if devices_by_brand.skip_reason is not defined else all_devices.stdout }}"
+
+- debug:
+    var: zigbee2mqtt_device
+
+- name: Install dependencies
+  ansible.builtin.package:
+    name:
+      - nodejs
+      - npm
+      - git
+      - make
+      - g++
+      - gcc
+    state: latest
+  become: true
+
+- name: Git checkout
+  ansible.builtin.git:
+    repo: 'https://github.com/Koenkk/zigbee2mqtt.git'
+    dest: /tmp/zigbee2mqtt
+    version: "{{ zigbee2mqtt_version }}"
+
+- name: Move zigbee2mqtt to /opt
+  ansible.builtin.copy:
+    src: /tmp/zigbee2mqtt
+    dest: /opt/zigbee2mqtt
+  become: true
+
+- name: Install npm packages
+  community.general.npm:
+    ci: yes
+    path: /opt/zigbee2mqtt
+  failed_when:
+    - result.rc == 0
+    - '"node-pre-gyp info ok" not in result.stdout'
+  become: true
+
+- name: configure zigbee2mqtt
+  ansible.builtin.template:
+    src: configuration.yaml.j2
+    dest: /opt/zigbee2mqtt/data/configuration.yaml
+  become: true
+
+- name: create systemctl service
+  ansible.builtin.template:
+    src: zigbee2mqtt.service.j2
+    dest: /etc/systemd/system/zigbee2mqtt.service
+  become: true
+
+# systemctl start zigbee2mqtt
+- name: systemctl start zigbee2mqtt
+  ansible.builtin.systemd:
+    name: zigbee2mqtt
+    state: started
+    daemon_reload: yes # https://github.com/ansible/ansible/issues/36585
+  become: true

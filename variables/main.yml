@@ -1,0 +1,10 @@
+---
+
+mqtt_base_topic: zigbee2mqtt
+mqtt_server: localhost
+mqtt_port: 1883
+
+
+zigbee2mqtt_version: HEAD
+zigbee2mqtt_network_key: GENERATE
+zigbee2mqtt_user: pi
